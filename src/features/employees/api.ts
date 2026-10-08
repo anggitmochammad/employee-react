@@ -20,7 +20,7 @@ export function getEmployees(
 ) {
   const query = new URLSearchParams();
   query.set("page", String(params.page ?? 1));
-  query.set("limit", String(params.limit ?? 20));
+  query.set("limit", String(params.limit ?? 15));
   if (params.search) query.set("search", params.search);
   if (params.departmentId)
     query.set("departmentId", String(params.departmentId));

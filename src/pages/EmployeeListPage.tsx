@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import {
-  ChevronLeft,
-  ChevronRight,
   Eye,
   LoaderCircle,
   Pencil,
@@ -14,16 +12,14 @@ import { ApiError } from "../api/client";
 import { AppLink } from "../components/AppLink";
 import type { NavigateHandler } from "../components/AppLink";
 import { PageHeader } from "../components/PageHeader";
+import { Pagination } from "../components/Pagination";
 import { getDepartments } from "../features/departments/api";
-import {
-  deleteEmployee,
-  getEmployees,
-} from "../features/employees/api";
+import { deleteEmployee, getEmployees } from "../features/employees/api";
 import { employeeRoutes } from "../features/employees/routes";
 import type { Department, Employee } from "../types/employee";
 
 type EmployeeListPageProps = { canEdit: boolean; onNavigate: NavigateHandler };
-const pageLimit = 10;
+const pageLimit = 15;
 const initialQuery = () => new URLSearchParams(window.location.search);
 
 function initialPage() {
@@ -50,8 +46,12 @@ export function EmployeeListPage({
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(initialPage);
-  const [searchInput, setSearchInput] = useState(() => initialQuery().get("search") ?? "");
-  const [search, setSearch] = useState(() => initialQuery().get("search") ?? "");
+  const [searchInput, setSearchInput] = useState(
+    () => initialQuery().get("search") ?? "",
+  );
+  const [search, setSearch] = useState(
+    () => initialQuery().get("search") ?? "",
+  );
   const [departmentId, setDepartmentId] = useState(initialDepartmentId);
   const [status, setStatus] = useState(initialStatus);
   const [loading, setLoading] = useState(true);
@@ -81,7 +81,11 @@ export function EmployeeListPage({
   const listQuery = query.size ? `?${query.toString()}` : "";
 
   useEffect(() => {
-    window.history.replaceState(window.history.state, "", `${employeeRoutes.list}${listQuery}`);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${employeeRoutes.list}${listQuery}`,
+    );
   }, [listQuery]);
 
   useEffect(() => {
@@ -155,7 +159,9 @@ export function EmployeeListPage({
         setLoading(true);
         setRetry((current) => current + 1);
       }
-      setEmployees((current) => current.filter((item) => item.id !== employee.id));
+      setEmployees((current) =>
+        current.filter((item) => item.id !== employee.id),
+      );
       setTotal((current) => Math.max(current - 1, 0));
       setSuccess(`${employee.name} berhasil dihapus.`);
     } catch (cause) {
@@ -252,22 +258,36 @@ export function EmployeeListPage({
                 onNavigate={onNavigate}
                 className="inline-flex min-h-10 items-center justify-center rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700"
               >
-                <Plus aria-hidden="true" className="mr-2 size-4" strokeWidth={2.25} />
+                <Plus
+                  aria-hidden="true"
+                  className="mr-2 size-4"
+                  strokeWidth={2.25}
+                />
                 Tambah employee
               </AppLink>
             )}
           </div>
         </div>
         {departmentError && (
-          <div role="alert" className="mx-5 mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:mx-7">
+          <div
+            role="alert"
+            className="mx-5 mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:mx-7"
+          >
             Pilihan department gagal dimuat: {departmentError}
-            <button type="button" onClick={() => setDepartmentRetry((current) => current + 1)} className="ml-2 cursor-pointer font-semibold underline focus-visible:outline-2 focus-visible:outline-rose-600">
+            <button
+              type="button"
+              onClick={() => setDepartmentRetry((current) => current + 1)}
+              className="ml-2 cursor-pointer font-semibold underline focus-visible:outline-2 focus-visible:outline-rose-600"
+            >
               Coba lagi
             </button>
           </div>
         )}
         {success && (
-          <p role="status" className="mx-5 mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 sm:mx-7">
+          <p
+            role="status"
+            className="mx-5 mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 sm:mx-7"
+          >
             {success}
           </p>
         )}
@@ -299,7 +319,11 @@ export function EmployeeListPage({
               aria-hidden="true"
               className="mb-5 grid size-14 place-items-center rounded-2xl bg-indigo-50"
             >
-              <UsersRound aria-hidden="true" className="size-7 text-indigo-600" strokeWidth={1.8} />
+              <UsersRound
+                aria-hidden="true"
+                className="size-7 text-indigo-600"
+                strokeWidth={1.8}
+              />
             </div>
             <h3 className="text-lg font-semibold text-slate-900">
               {search || departmentId || status
@@ -313,7 +337,12 @@ export function EmployeeListPage({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-indigo-600" role="region" aria-label="Tabel employee" tabIndex={0}>
+          <div
+            className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-indigo-600"
+            role="region"
+            aria-label="Tabel employee"
+            tabIndex={0}
+          >
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
@@ -382,9 +411,15 @@ export function EmployeeListPage({
                                   className="inline-flex size-11 cursor-pointer items-center justify-center rounded-lg text-rose-700 hover:bg-rose-50 hover:text-rose-900 focus-visible:outline-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   {deletingId === employee.id ? (
-                                    <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+                                    <LoaderCircle
+                                      aria-hidden="true"
+                                      className="size-4 animate-spin"
+                                    />
                                   ) : (
-                                    <Trash2 aria-hidden="true" className="size-4" />
+                                    <Trash2
+                                      aria-hidden="true"
+                                      className="size-4"
+                                    />
                                   )}
                                 </button>
                               </AlertDialog.Trigger>
@@ -395,16 +430,26 @@ export function EmployeeListPage({
                                     Hapus employee?
                                   </AlertDialog.Title>
                                   <AlertDialog.Description className="mt-2 text-sm leading-6 text-slate-600">
-                                    Data {employee.name} akan dihapus. Tindakan ini tidak dapat dibatalkan.
+                                    Data {employee.name} akan dihapus. Tindakan
+                                    ini tidak dapat dibatalkan.
                                   </AlertDialog.Description>
                                   <div className="mt-6 flex justify-end gap-3">
                                     <AlertDialog.Cancel asChild>
-                                      <button type="button" className="min-h-10 cursor-pointer rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-indigo-600">
+                                      <button
+                                        type="button"
+                                        className="min-h-10 cursor-pointer rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-indigo-600"
+                                      >
                                         Batal
                                       </button>
                                     </AlertDialog.Cancel>
                                     <AlertDialog.Action asChild>
-                                      <button type="button" onClick={() => void handleDelete(employee)} className="min-h-10 cursor-pointer rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 focus-visible:outline-2 focus-visible:outline-rose-600">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void handleDelete(employee)
+                                        }
+                                        className="min-h-10 cursor-pointer rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 focus-visible:outline-2 focus-visible:outline-rose-600"
+                                      >
                                         Hapus employee
                                       </button>
                                     </AlertDialog.Action>
@@ -422,40 +467,17 @@ export function EmployeeListPage({
             </table>
           </div>
         )}
-        {!loading && totalPages > 1 && (
-          <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-7">
-            <p className="text-slate-500">
-              Halaman {page} dari {totalPages}
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={page === 1}
-                onClick={() => {
-                  setLoading(true);
-                  setError(null);
-                  setPage((current) => current - 1);
-                }}
-                className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ChevronLeft aria-hidden="true" className="mr-1 size-4" />
-                Sebelumnya
-              </button>
-              <button
-                type="button"
-                disabled={page === totalPages}
-                onClick={() => {
-                  setLoading(true);
-                  setError(null);
-                  setPage((current) => current + 1);
-                }}
-                className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Berikutnya
-                <ChevronRight aria-hidden="true" className="ml-1 size-4" />
-              </button>
-            </div>
-          </div>
+        {!loading && !error && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            label="Halaman daftar employee"
+            onPageChange={(nextPage) => {
+              setLoading(true);
+              setError(null);
+              setPage(nextPage);
+            }}
+          />
         )}
       </section>
     </>

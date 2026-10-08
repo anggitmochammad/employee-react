@@ -23,7 +23,8 @@ export function EmployeeDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
-  const success = (window.history.state as { success?: unknown } | null)?.success;
+  const success = (window.history.state as { success?: unknown } | null)
+    ?.success;
   const successMessage = typeof success === "string" ? success : null;
   const listHref = `${employeeRoutes.list}${window.location.search}`;
 
@@ -61,7 +62,10 @@ export function EmployeeDetailPage({
         onNavigate={onNavigate}
         className="mb-6 inline-flex items-center text-sm font-medium text-indigo-700 hover:text-indigo-800 focus-visible:outline-2 focus-visible:outline-indigo-600"
       >
-        <ArrowLeft aria-hidden="true" className="mr-2 inline size-4 align-text-bottom" />
+        <ArrowLeft
+          aria-hidden="true"
+          className="mr-2 inline size-4 align-text-bottom"
+        />
         Kembali ke daftar
       </AppLink>
       <PageHeader
@@ -81,7 +85,10 @@ export function EmployeeDetailPage({
         }
       />
       {successMessage && !loading && !error && (
-        <p role="status" className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <p
+          role="status"
+          className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+        >
           {successMessage}
         </p>
       )}
@@ -101,7 +108,11 @@ export function EmployeeDetailPage({
           <p role="alert" className="mt-2 text-sm text-rose-700">
             {error}
           </p>
-          <button type="button" onClick={retryLoad} className="mt-4 min-h-10 cursor-pointer rounded-xl bg-white px-4 text-sm font-semibold text-rose-800 hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-rose-600">
+          <button
+            type="button"
+            onClick={retryLoad}
+            className="mt-4 min-h-10 cursor-pointer rounded-xl bg-white px-4 text-sm font-semibold text-rose-800 hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-rose-600"
+          >
             Coba lagi
           </button>
         </section>
@@ -125,7 +136,9 @@ function Info({ label, value }: { label: string; value: string }) {
       <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         {label}
       </dt>
-      <dd className="mt-1 break-words text-sm font-medium text-slate-900">{value}</dd>
+      <dd className="mt-1 break-words text-sm font-medium text-slate-900">
+        {value}
+      </dd>
     </div>
   );
 }
