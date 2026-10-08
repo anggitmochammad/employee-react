@@ -8,12 +8,14 @@ import { LayoutAdmin } from './components/LayoutAdmin'
 import { EmployeeDetailPage } from './pages/EmployeeDetailPage'
 import { EmployeeFormPage } from './pages/EmployeeFormPage'
 import { EmployeeListPage } from './pages/EmployeeListPage'
+import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 
 type Route =
   | { page: 'login' }
   | { page: 'employees' }
+  | { page: 'dashboard' }
   | { page: 'employee-new' }
   | { page: 'employee-detail'; id: number }
   | { page: 'employee-edit'; id: number }
@@ -32,7 +34,9 @@ function matchRoute(pathname: string): Route {
   const path = pathname.replace(/\/+$/, '') || '/'
 
   if (path === '/login') return { page: 'login' }
-  if (path === '/' || path === '/employees') return { page: 'employees' }
+  if (path === '/') return { page: 'dashboard' }
+  if (path === '/dashboard') return { page: 'dashboard' }
+  if (path === '/employees') return { page: 'employees' }
   if (path === '/employees/new') return { page: 'employee-new' }
 
   const editMatch = /^\/employees\/([1-9]\d*)\/edit$/.exec(path)
@@ -157,6 +161,9 @@ function App() {
   // Setelah sesi terverifikasi, pilih halaman berdasarkan route aktif.
   // canEdit berasal dari role user dan dipakai untuk membatasi aksi admin.
   switch (route.page) {
+    case 'dashboard':
+      content = <DashboardPage onNavigate={onNavigate} />
+      break
     case 'employees':
       content = <EmployeeListPage canEdit={canEdit} onNavigate={onNavigate} />
       break

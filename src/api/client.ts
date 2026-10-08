@@ -5,11 +5,13 @@ export class ApiError extends Error {
   // Status HTTP dipertahankan agar halaman dapat membedakan 401, 403, 404,
   // dan error jaringan (status 0).
   status: number
+  details: string[]
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, details: string[] = []) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.details = details
   }
 }
 
@@ -36,6 +38,12 @@ function readErrorMessage(body: unknown): string | null {
     return items.length > 0 ? items.join(' ') : null
   }
   return null
+}
+
+function readErrorDetails(body: unknown): string[] {
+  if (typeof body !== 'object' || body === null || !('errors' in body)) return []
+  const errors = body.errors
+  return Array.isArray(errors) ? errors.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())) : []
 }
 
 export async function apiRequest<T>(path: `/api/${string}`, options: ApiOptions = {}): Promise<T> {
@@ -73,7 +81,8 @@ export async function apiRequest<T>(path: `/api/${string}`, options: ApiOptions 
     // menghapus sesi baru jika user sudah login ulang saat request berjalan.
     if (auth && response.status === 401 && getSessionToken() === requestToken) clearSessionToken()
     const body = await response.json().catch(() => null) as unknown
-    throw new ApiError(readErrorMessage(body) ?? fallbackMessages[response.status] ?? 'Permintaan gagal. Coba lagi.', response.status)
+    const details = readErrorDetails(body)
+    throw new ApiError(readErrorMessage(body) ?? (details.join(' ') || fallbackMessages[response.status] || 'Permintaan gagal. Coba lagi.'), response.status, details)
   }
 
   // DELETE mengembalikan 204 tanpa body, jadi jangan mencoba response.json().
