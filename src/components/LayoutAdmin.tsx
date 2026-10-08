@@ -1,5 +1,10 @@
 import type { ReactNode } from "react";
-import { LayoutDashboard, UsersRound } from "lucide-react";
+import {
+  Building2,
+  LayoutDashboard,
+  ScrollText,
+  UsersRound,
+} from "lucide-react";
 import type { AuthUser } from "../auth/api";
 import { AppLink } from "./AppLink";
 import type { NavigateHandler } from "./AppLink";
@@ -23,6 +28,9 @@ export function LayoutAdmin({
 }: LayoutAdminProps) {
   const employeeActive = activePage.startsWith("employee");
   const dashboardActive = activePage === "dashboard";
+  const departmentActive = activePage === "departments";
+  const auditActive = activePage === "audit-logs";
+  const isAdmin = user?.role === "admin";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -51,7 +59,8 @@ export function LayoutAdmin({
               aria-current={dashboardActive ? "page" : undefined}
               className={`flex items-center gap-3 rounded-xl px-4 py-3 font-medium ${dashboardActive ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}
             >
-              <LayoutDashboard aria-hidden="true" className="size-4" /> Dashboard
+              <LayoutDashboard aria-hidden="true" className="size-4" />{" "}
+              Dashboard
             </AppLink>
             <AppLink
               to="/employees"
@@ -61,6 +70,24 @@ export function LayoutAdmin({
             >
               <UsersRound aria-hidden="true" className="size-4" /> Employee
             </AppLink>
+            <AppLink
+              to="/departments"
+              onNavigate={onNavigate}
+              aria-current={departmentActive ? "page" : undefined}
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 font-medium ${departmentActive ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}
+            >
+              <Building2 aria-hidden="true" className="size-4" /> Department
+            </AppLink>
+            {isAdmin && (
+              <AppLink
+                to="/audit-logs"
+                onNavigate={onNavigate}
+                aria-current={auditActive ? "page" : undefined}
+                className={`flex items-center gap-3 rounded-xl px-4 py-3 font-medium ${auditActive ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}
+              >
+                <ScrollText aria-hidden="true" className="size-4" /> Audit log
+              </AppLink>
+            )}
           </nav>
           <div className="border-t border-slate-200 p-4">
             <p className="truncate text-xs text-slate-500">
@@ -94,7 +121,7 @@ export function LayoutAdmin({
               <div className="ml-auto flex items-center gap-2 text-sm lg:ml-0">
                 <nav
                   aria-label="Navigasi mobile"
-                  className="flex gap-1 lg:hidden"
+                  className="flex flex-wrap gap-1 lg:hidden"
                 >
                   <AppLink
                     to="/dashboard"
@@ -110,6 +137,24 @@ export function LayoutAdmin({
                   >
                     Employee
                   </AppLink>
+                  <AppLink
+                    to="/departments"
+                    onNavigate={onNavigate}
+                    aria-current={departmentActive ? "page" : undefined}
+                    className={`rounded-lg px-2 py-2 font-medium ${departmentActive ? "bg-indigo-50 text-indigo-700" : "text-slate-600"}`}
+                  >
+                    Department
+                  </AppLink>
+                  {isAdmin && (
+                    <AppLink
+                      to="/audit-logs"
+                      onNavigate={onNavigate}
+                      aria-current={auditActive ? "page" : undefined}
+                      className={`rounded-lg px-2 py-2 font-medium ${auditActive ? "bg-indigo-50 text-indigo-700" : "text-slate-600"}`}
+                    >
+                      Audit log
+                    </AppLink>
+                  )}
                 </nav>
                 <button
                   type="button"
