@@ -14,9 +14,9 @@ import { ApiError } from "../api/client";
 import { AppLink } from "../components/AppLink";
 import type { NavigateHandler } from "../components/AppLink";
 import { PageHeader } from "../components/PageHeader";
+import { getDepartments } from "../features/departments/api";
 import {
   deleteEmployee,
-  getDepartments,
   getEmployees,
 } from "../features/employees/api";
 import { employeeRoutes } from "../features/employees/routes";
@@ -24,6 +24,22 @@ import type { Department, Employee } from "../types/employee";
 
 type EmployeeListPageProps = { canEdit: boolean; onNavigate: NavigateHandler };
 const pageLimit = 10;
+const initialQuery = () => new URLSearchParams(window.location.search);
+
+function initialPage() {
+  const value = Number(initialQuery().get("page"));
+  return Number.isSafeInteger(value) && value > 0 ? value : 1;
+}
+
+function initialDepartmentId() {
+  const value = initialQuery().get("departmentId") ?? "";
+  return /^[1-9]\d*$/.test(value) ? value : "";
+}
+
+function initialStatus() {
+  const value = initialQuery().get("status");
+  return value === "true" || value === "false" ? value : "";
+}
 
 export function EmployeeListPage({
   canEdit,
@@ -33,41 +49,59 @@ export function EmployeeListPage({
   const [departments, setDepartments] = useState<Department[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [page, setPage] = useState(1);
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [departmentId, setDepartmentId] = useState("");
-  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(initialPage);
+  const [searchInput, setSearchInput] = useState(() => initialQuery().get("search") ?? "");
+  const [search, setSearch] = useState(() => initialQuery().get("search") ?? "");
+  const [departmentId, setDepartmentId] = useState(initialDepartmentId);
+  const [status, setStatus] = useState(initialStatus);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [departmentError, setDepartmentError] = useState<string | null>(null);
+  const [departmentRetry, setDepartmentRetry] = useState(0);
+  const [success, setSuccess] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
+    if (searchInput.trim() === search) return;
     const timeout = window.setTimeout(() => {
       setSearch(searchInput.trim());
       setPage(1);
+      setLoading(true);
+      setError(null);
     }, 350);
     return () => window.clearTimeout(timeout);
-  }, [searchInput]);
+  }, [searchInput, search]);
+
+  const query = new URLSearchParams();
+  if (page > 1) query.set("page", String(page));
+  if (search) query.set("search", search);
+  if (departmentId) query.set("departmentId", departmentId);
+  if (status) query.set("status", status);
+  const listQuery = query.size ? `?${query.toString()}` : "";
+
+  useEffect(() => {
+    window.history.replaceState(window.history.state, "", `${employeeRoutes.list}${listQuery}`);
+  }, [listQuery]);
 
   useEffect(() => {
     const controller = new AbortController();
     getDepartments(controller.signal)
-      .then(setDepartments)
+      .then((data) => {
+        setDepartments(data);
+        setDepartmentError(null);
+      })
       .catch((cause: unknown) => {
         if (!(cause instanceof DOMException && cause.name === "AbortError"))
-          setError(
+          setDepartmentError(
             cause instanceof Error ? cause.message : "Department gagal dimuat.",
           );
       });
     return () => controller.abort();
-  }, []);
+  }, [departmentRetry]);
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
-    setError(null);
     getEmployees(
       {
         page,
@@ -84,12 +118,14 @@ export function EmployeeListPage({
         setTotalPages(Math.max(response.totalPages, 1));
       })
       .catch((cause: unknown) => {
-        if (!(cause instanceof DOMException && cause.name === "AbortError"))
+        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          setEmployees([]);
           setError(
             cause instanceof Error
               ? cause.message
               : "Daftar employee gagal dimuat.",
           );
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -103,6 +139,8 @@ export function EmployeeListPage({
   ) => {
     setter(value);
     setPage(1);
+    setLoading(true);
+    setError(null);
   };
 
   const handleDelete = async (employee: Employee) => {
@@ -110,12 +148,16 @@ export function EmployeeListPage({
     setError(null);
     try {
       await deleteEmployee(employee.id);
-      if (employees.length === 1 && page > 1) setPage((current) => current - 1);
-      else
-        setEmployees((current) =>
-          current.filter((item) => item.id !== employee.id),
-        );
+      if (employees.length === 1 && page > 1) {
+        setLoading(true);
+        setPage((current) => current - 1);
+      } else {
+        setLoading(true);
+        setRetry((current) => current + 1);
+      }
+      setEmployees((current) => current.filter((item) => item.id !== employee.id));
       setTotal((current) => Math.max(current - 1, 0));
+      setSuccess(`${employee.name} berhasil dihapus.`);
     } catch (cause) {
       setError(
         cause instanceof ApiError ? cause.message : "Employee gagal dihapus.",
@@ -123,6 +165,12 @@ export function EmployeeListPage({
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const retryList = () => {
+    setLoading(true);
+    setError(null);
+    setRetry((current) => current + 1);
   };
 
   return (
@@ -145,7 +193,9 @@ export function EmployeeListPage({
               Daftar employee
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              {total} employee ditemukan.
+              {error && employees.length === 0
+                ? "Daftar belum dapat dimuat."
+                : `${total} employee ditemukan.`}
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -198,7 +248,7 @@ export function EmployeeListPage({
             </label>
             {canEdit && (
               <AppLink
-                to={employeeRoutes.create}
+                to={`${employeeRoutes.create}${listQuery}`}
                 onNavigate={onNavigate}
                 className="inline-flex min-h-10 items-center justify-center rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700"
               >
@@ -208,6 +258,19 @@ export function EmployeeListPage({
             )}
           </div>
         </div>
+        {departmentError && (
+          <div role="alert" className="mx-5 mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:mx-7">
+            Pilihan department gagal dimuat: {departmentError}
+            <button type="button" onClick={() => setDepartmentRetry((current) => current + 1)} className="ml-2 cursor-pointer font-semibold underline focus-visible:outline-2 focus-visible:outline-rose-600">
+              Coba lagi
+            </button>
+          </div>
+        )}
+        {success && (
+          <p role="status" className="mx-5 mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 sm:mx-7">
+            {success}
+          </p>
+        )}
         {error && (
           <div
             role="alert"
@@ -216,8 +279,8 @@ export function EmployeeListPage({
             {error}
             <button
               type="button"
-              onClick={() => setRetry((current) => current + 1)}
-              className="ml-3 font-semibold underline"
+              onClick={retryList}
+              className="ml-3 cursor-pointer font-semibold underline focus-visible:outline-2 focus-visible:outline-rose-600"
             >
               Coba lagi
             </button>
@@ -230,7 +293,7 @@ export function EmployeeListPage({
           >
             Memuat employee...
           </div>
-        ) : employees.length === 0 ? (
+        ) : error && employees.length === 0 ? null : employees.length === 0 ? (
           <div className="flex min-h-72 flex-col items-center justify-center px-6 py-12 text-center">
             <div
               aria-hidden="true"
@@ -250,8 +313,8 @@ export function EmployeeListPage({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+          <div className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-indigo-600" role="region" aria-label="Tabel employee" tabIndex={0}>
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-5 py-3 font-semibold sm:px-7">Nama</th>
@@ -267,7 +330,7 @@ export function EmployeeListPage({
                   <tr key={employee.id} className="hover:bg-slate-50">
                     <td className="px-5 py-4 sm:px-7">
                       <AppLink
-                        to={employeeRoutes.detail(employee.id)}
+                        to={`${employeeRoutes.detail(employee.id)}${listQuery}`}
                         onNavigate={onNavigate}
                         className="font-semibold text-slate-900 hover:text-indigo-700"
                       >
@@ -292,9 +355,9 @@ export function EmployeeListPage({
                         <AppLink
                           aria-label={`Lihat detail ${employee.name}`}
                           title="Detail"
-                          to={employeeRoutes.detail(employee.id)}
+                          to={`${employeeRoutes.detail(employee.id)}${listQuery}`}
                           onNavigate={onNavigate}
-                          className="inline-flex size-9 items-center justify-center rounded-lg text-indigo-700 hover:bg-indigo-50 hover:text-indigo-900 focus-visible:outline-2 focus-visible:outline-indigo-600"
+                          className="inline-flex size-11 items-center justify-center rounded-lg text-indigo-700 hover:bg-indigo-50 hover:text-indigo-900 focus-visible:outline-2 focus-visible:outline-indigo-600"
                         >
                           <Eye aria-hidden="true" className="size-4" />
                         </AppLink>
@@ -303,9 +366,9 @@ export function EmployeeListPage({
                             <AppLink
                               aria-label={`Ubah ${employee.name}`}
                               title="Ubah"
-                              to={employeeRoutes.edit(employee.id)}
+                              to={`${employeeRoutes.edit(employee.id)}${listQuery}`}
                               onNavigate={onNavigate}
-                              className="inline-flex size-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-2 focus-visible:outline-indigo-600"
+                              className="inline-flex size-11 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-2 focus-visible:outline-indigo-600"
                             >
                               <Pencil aria-hidden="true" className="size-4" />
                             </AppLink>
@@ -316,7 +379,7 @@ export function EmployeeListPage({
                                   aria-label={`Hapus ${employee.name}`}
                                   title="Hapus"
                                   disabled={deletingId !== null}
-                                  className="inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-rose-700 hover:bg-rose-50 hover:text-rose-900 focus-visible:outline-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                  className="inline-flex size-11 cursor-pointer items-center justify-center rounded-lg text-rose-700 hover:bg-rose-50 hover:text-rose-900 focus-visible:outline-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   {deletingId === employee.id ? (
                                     <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
@@ -368,7 +431,11 @@ export function EmployeeListPage({
               <button
                 type="button"
                 disabled={page === 1}
-                onClick={() => setPage((current) => current - 1)}
+                onClick={() => {
+                  setLoading(true);
+                  setError(null);
+                  setPage((current) => current - 1);
+                }}
                 className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <ChevronLeft aria-hidden="true" className="mr-1 size-4" />
@@ -377,7 +444,11 @@ export function EmployeeListPage({
               <button
                 type="button"
                 disabled={page === totalPages}
-                onClick={() => setPage((current) => current + 1)}
+                onClick={() => {
+                  setLoading(true);
+                  setError(null);
+                  setPage((current) => current + 1);
+                }}
                 className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Berikutnya

@@ -1,7 +1,6 @@
 import { apiRequest } from "../../api/client";
 import type {
   CreateEmployeeInput,
-  Department,
   Employee,
   EmployeeListResponse,
   UpdateEmployeeInput,
@@ -34,10 +33,6 @@ export function getEmployees(
 
 export function getEmployee(id: number, signal?: AbortSignal) {
   return apiRequest<Employee>(`/api/employees/${id}`, { signal });
-}
-
-export function getDepartments(signal?: AbortSignal) {
-  return apiRequest<Department[]>("/api/departments", { signal });
 }
 
 export function createEmployee(input: CreateEmployeeInput) {

@@ -22,10 +22,13 @@ export function EmployeeDetailPage({
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const success = (window.history.state as { success?: unknown } | null)?.success;
+  const successMessage = typeof success === "string" ? success : null;
+  const listHref = `${employeeRoutes.list}${window.location.search}`;
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
     getEmployee(id, controller.signal)
       .then(setEmployee)
       .catch((cause: unknown) => {
@@ -43,14 +46,20 @@ export function EmployeeDetailPage({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [id]);
+  }, [id, retry]);
+
+  const retryLoad = () => {
+    setLoading(true);
+    setError(null);
+    setRetry((current) => current + 1);
+  };
 
   return (
     <>
       <AppLink
-        to={employeeRoutes.list}
+        to={listHref}
         onNavigate={onNavigate}
-        className="mb-6 inline-flex text-sm font-medium text-indigo-700 hover:text-indigo-800"
+        className="mb-6 inline-flex items-center text-sm font-medium text-indigo-700 hover:text-indigo-800 focus-visible:outline-2 focus-visible:outline-indigo-600"
       >
         <ArrowLeft aria-hidden="true" className="mr-2 inline size-4 align-text-bottom" />
         Kembali ke daftar
@@ -60,17 +69,22 @@ export function EmployeeDetailPage({
         title={employee ? employee.name : `Detail employee #${id}`}
         description="Informasi profil, department, dan status employee."
         action={
-          employee && canEdit ? (
+          employee && canEdit && !loading && !error ? (
             <AppLink
-              to={employeeRoutes.edit(id)}
+              to={`${employeeRoutes.edit(id)}${window.location.search}`}
               onNavigate={onNavigate}
-              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-indigo-600"
             >
               Ubah employee
             </AppLink>
           ) : undefined
         }
       />
+      {successMessage && !loading && !error && (
+        <p role="status" className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {successMessage}
+        </p>
+      )}
       {loading && (
         <div
           role="status"
@@ -87,16 +101,19 @@ export function EmployeeDetailPage({
           <p role="alert" className="mt-2 text-sm text-rose-700">
             {error}
           </p>
+          <button type="button" onClick={retryLoad} className="mt-4 min-h-10 cursor-pointer rounded-xl bg-white px-4 text-sm font-semibold text-rose-800 hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-rose-600">
+            Coba lagi
+          </button>
         </section>
       )}
       {!loading && !error && employee && (
-        <section className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:grid-cols-2 sm:p-8">
+        <dl className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:grid-cols-2 sm:p-8">
           <Info label="Nama" value={employee.name} />
           <Info label="Email" value={employee.email} />
           <Info label="Telepon" value={employee.phone} />
           <Info label="Department" value={employee.department.name} />
           <Info label="Status" value={employee.status ? "Aktif" : "Nonaktif"} />
-        </section>
+        </dl>
       )}
     </>
   );
@@ -108,7 +125,7 @@ function Info({ label, value }: { label: string; value: string }) {
       <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         {label}
       </dt>
-      <dd className="mt-1 text-sm font-medium text-slate-900">{value}</dd>
+      <dd className="mt-1 break-words text-sm font-medium text-slate-900">{value}</dd>
     </div>
   );
 }

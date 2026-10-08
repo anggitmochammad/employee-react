@@ -5,9 +5,9 @@ import { AppLink } from "../components/AppLink";
 import type { NavigateHandler } from "../components/AppLink";
 import { PageHeader } from "../components/PageHeader";
 import { ApiError } from "../api/client";
+import { getDepartments } from "../features/departments/api";
 import {
   createEmployee,
-  getDepartments,
   getEmployee,
   updateEmployee,
 } from "../features/employees/api";
@@ -41,11 +41,14 @@ export function EmployeeFormPage({
 }: EmployeeFormPageProps) {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [loading, setLoading] = useState(mode === "edit");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const title = mode === "create" ? "Tambah employee" : "Ubah employee";
+  const listHref = `${employeeRoutes.list}${window.location.search}`;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -57,6 +60,7 @@ export function EmployeeFormPage({
     ])
       .then(([departmentData, employee]) => {
         setDepartments(departmentData);
+        setLoadError(null);
         if (employee)
           setForm({
             name: employee.name,
@@ -69,7 +73,7 @@ export function EmployeeFormPage({
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === "AbortError")
           return;
-        setError(
+        setLoadError(
           cause instanceof Error ? cause.message : "Data form gagal dimuat.",
         );
       })
@@ -77,7 +81,13 @@ export function EmployeeFormPage({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [id, mode]);
+  }, [id, mode, retry]);
+
+  const retryLoad = () => {
+    setLoading(true);
+    setLoadError(null);
+    setRetry((current) => current + 1);
+  };
 
   const updateField = (field: keyof FormState, value: string | boolean) =>
     setForm((current) => ({ ...current, [field]: value }));
@@ -88,6 +98,7 @@ export function EmployeeFormPage({
     if (!form.departmentId) {
       setFieldErrors({ departmentId: "Department wajib dipilih." });
       setError("Periksa field yang ditandai.");
+      document.getElementById("employee-department")?.focus();
       return;
     }
     setSaving(true);
@@ -105,18 +116,23 @@ export function EmployeeFormPage({
         mode === "create"
           ? await createEmployee(input)
           : await updateEmployee(id as number, input);
-      const destination = employeeRoutes.detail(employee.id);
-      window.history.pushState(null, "", destination);
+      const destination = `${employeeRoutes.detail(employee.id)}${window.location.search}`;
+      window.history.pushState({ success: mode === "create" ? "Employee berhasil ditambahkan." : "Perubahan employee berhasil disimpan." }, "", destination);
       window.dispatchEvent(new PopStateEvent("popstate"));
       window.scrollTo(0, 0);
     } catch (cause) {
       if (cause instanceof ApiError) {
-        setFieldErrors(mapValidationErrors(cause.details));
+        const validationErrors = mapValidationErrors(cause.details);
+        setFieldErrors(validationErrors);
         setError(
           cause.details.length > 0
-            ? "Periksa field yang ditandai."
+            ? Object.keys(validationErrors).length > 0
+              ? "Periksa field yang ditandai."
+              : cause.details.join(" ")
             : cause.message,
         );
+        const firstField = ["name", "email", "phone", "departmentId"].find((field) => validationErrors[field]);
+        if (firstField) document.getElementById(`employee-${firstField === "departmentId" ? "department" : firstField}`)?.focus();
       } else setError("Employee gagal disimpan.");
     } finally {
       setSaving(false);
@@ -126,9 +142,9 @@ export function EmployeeFormPage({
   return (
     <>
       <AppLink
-        to={employeeRoutes.list}
+        to={listHref}
         onNavigate={onNavigate}
-        className="mb-6 inline-flex text-sm font-medium text-indigo-700 hover:text-indigo-800"
+        className="mb-6 inline-flex items-center text-sm font-medium text-indigo-700 hover:text-indigo-800 focus-visible:outline-2 focus-visible:outline-indigo-600"
       >
         <ArrowLeft aria-hidden="true" className="mr-2 inline size-4 align-text-bottom" />
         Kembali
@@ -145,6 +161,14 @@ export function EmployeeFormPage({
         >
           Memuat form...
         </div>
+      ) : loadError ? (
+        <section className="max-w-3xl rounded-2xl border border-rose-200 bg-rose-50 p-6 sm:p-8">
+          <h2 className="text-lg font-semibold text-rose-900">Form tidak tersedia</h2>
+          <p role="alert" className="mt-2 text-sm text-rose-700">{loadError}</p>
+          <button type="button" onClick={retryLoad} className="mt-4 min-h-10 cursor-pointer rounded-xl bg-white px-4 text-sm font-semibold text-rose-800 hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-rose-600">
+            Coba lagi
+          </button>
+        </section>
       ) : (
         <form
           onSubmit={handleSubmit}
@@ -152,6 +176,7 @@ export function EmployeeFormPage({
         >
           <div className="grid gap-5 sm:grid-cols-2">
             <Field
+              id="employee-name"
               label="Nama"
               value={form.name}
               error={fieldErrors.name}
@@ -159,6 +184,7 @@ export function EmployeeFormPage({
               onChange={(value) => updateField("name", value)}
             />
             <Field
+              id="employee-email"
               label="Email"
               type="email"
               value={form.email}
@@ -167,7 +193,9 @@ export function EmployeeFormPage({
               onChange={(value) => updateField("email", value)}
             />
             <Field
+              id="employee-phone"
               label="Telepon"
+              type="tel"
               value={form.phone}
               error={fieldErrors.phone}
               required
@@ -178,7 +206,10 @@ export function EmployeeFormPage({
                 Department
               </span>
               <select
+                id="employee-department"
                 required
+                aria-invalid={Boolean(fieldErrors.departmentId)}
+                aria-describedby={fieldErrors.departmentId ? "employee-department-error" : undefined}
                 value={form.departmentId}
                 onChange={(event) =>
                   updateField("departmentId", event.target.value)
@@ -193,7 +224,7 @@ export function EmployeeFormPage({
                 ))}
               </select>
               {fieldErrors.departmentId && (
-                <p className="mt-1 text-xs text-rose-600">
+                <p id="employee-department-error" className="mt-1 text-sm text-rose-700">
                   {fieldErrors.departmentId}
                 </p>
               )}
@@ -218,7 +249,7 @@ export function EmployeeFormPage({
           )}
           <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <AppLink
-              to={employeeRoutes.list}
+              to={listHref}
               onNavigate={onNavigate}
               className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
@@ -239,6 +270,7 @@ export function EmployeeFormPage({
 }
 
 function Field({
+  id,
   label,
   type = "text",
   value,
@@ -246,6 +278,7 @@ function Field({
   error,
   onChange,
 }: {
+  id: string;
   label: string;
   type?: string;
   value: string;
@@ -259,13 +292,16 @@ function Field({
         {label}
       </span>
       <input
+        id={id}
         type={type}
         required={required}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${id}-error` : undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className={`min-h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 ${error ? "border-rose-400" : "border-slate-300"}`}
       />
-      {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
+      {error && <p id={`${id}-error`} className="mt-1 text-sm text-rose-700">{error}</p>}
     </label>
   );
 }
@@ -277,13 +313,13 @@ function mapValidationErrors(errors: string[]): Record<string, string> {
       "name",
       "email",
       "phone",
-      "department",
       "departmentId",
+      "department",
       "status",
     ].find((candidate) =>
       message.toLowerCase().includes(candidate.toLowerCase()),
     );
-    if (field) fields[field] = message;
+    if (field) fields[field === "department" ? "departmentId" : field] = message;
   });
   return fields;
 }
