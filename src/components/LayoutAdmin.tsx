@@ -35,7 +35,7 @@ export function LayoutAdmin({
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+        <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:self-start lg:flex-col lg:overflow-y-auto">
           <div className="flex items-center gap-3 border-b border-slate-200 px-6 py-5 font-semibold tracking-tight text-slate-950">
             <span
               aria-hidden="true"
