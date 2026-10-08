@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 import { AppLink } from "../components/AppLink";
 import type { NavigateHandler } from "../components/AppLink";
 import { PageHeader } from "../components/PageHeader";
@@ -41,6 +41,16 @@ export function EmployeeFormPage({
 }: EmployeeFormPageProps) {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
+  const [selectedDepartment, setSelectedDepartment] =
+    useState<Department | null>(null);
+  const [departmentSearch, setDepartmentSearch] = useState("");
+  const [departmentOpen, setDepartmentOpen] = useState(false);
+  const [activeDepartmentIndex, setActiveDepartmentIndex] = useState(-1);
+  const [departmentSearchStarted, setDepartmentSearchStarted] = useState(false);
+  const [departmentLoading, setDepartmentLoading] = useState(false);
+  const [departmentError, setDepartmentError] = useState<string | null>(null);
+  const [departmentRetry, setDepartmentRetry] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,8 +70,11 @@ export function EmployeeFormPage({
     ])
       .then(([departmentData, employee]) => {
         setDepartments(departmentData);
+        setAllDepartments(departmentData);
         setLoadError(null);
-        if (employee)
+        if (employee) {
+          setSelectedDepartment(employee.department);
+          setDepartmentSearch(employee.department.name);
           setForm({
             name: employee.name,
             email: employee.email,
@@ -69,6 +82,7 @@ export function EmployeeFormPage({
             departmentId: String(employee.departmentId),
             status: employee.status,
           });
+        }
       })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === "AbortError")
@@ -83,6 +97,39 @@ export function EmployeeFormPage({
     return () => controller.abort();
   }, [id, mode, retry]);
 
+  useEffect(() => {
+    if (!departmentSearchStarted) return;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(
+      () => {
+        getDepartments(controller.signal, departmentSearch.trim())
+          .then((data) => {
+            setDepartments(data);
+            if (!departmentSearch.trim()) setAllDepartments(data);
+            setActiveDepartmentIndex(data.length > 0 ? 0 : -1);
+            setDepartmentError(null);
+          })
+          .catch((cause: unknown) => {
+            if (cause instanceof DOMException && cause.name === "AbortError")
+              return;
+            setDepartmentError(
+              cause instanceof Error
+                ? cause.message
+                : "Pilihan department gagal dimuat.",
+            );
+          })
+          .finally(() => {
+            if (!controller.signal.aborted) setDepartmentLoading(false);
+          });
+      },
+      departmentSearch.trim() ? 350 : 0,
+    );
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [departmentRetry, departmentSearch, departmentSearchStarted]);
+
   const retryLoad = () => {
     setLoading(true);
     setLoadError(null);
@@ -91,6 +138,19 @@ export function EmployeeFormPage({
 
   const updateField = (field: keyof FormState, value: string | boolean) =>
     setForm((current) => ({ ...current, [field]: value }));
+
+  const selectDepartment = (department: Department) => {
+    updateField("departmentId", String(department.id));
+    setSelectedDepartment(department);
+    setDepartmentSearch(department.name);
+    setDepartmentSearchStarted(false);
+    setDepartmentLoading(false);
+    setDepartmentError(null);
+    setDepartments(allDepartments);
+    setDepartmentOpen(false);
+    setActiveDepartmentIndex(-1);
+    setFieldErrors((current) => ({ ...current, departmentId: "" }));
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -229,32 +289,150 @@ export function EmployeeFormPage({
               required
               onChange={(value) => updateField("phone", value)}
             />
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-slate-700">
-                Department
-              </span>
-              <select
-                id="employee-department"
-                required
-                aria-invalid={Boolean(fieldErrors.departmentId)}
-                aria-describedby={
-                  fieldErrors.departmentId
-                    ? "employee-department-error"
-                    : undefined
-                }
-                value={form.departmentId}
-                onChange={(event) =>
-                  updateField("departmentId", event.target.value)
-                }
-                className={`min-h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 ${fieldErrors.departmentId ? "border-rose-400" : "border-slate-300"}`}
+            <div className="block">
+              <label
+                htmlFor="employee-department"
+                className="mb-2 block text-sm font-medium text-slate-700"
               >
-                <option value="">Pilih department</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </select>
+                Department
+              </label>
+              <div
+                className="relative"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget))
+                    setDepartmentOpen(false);
+                }}
+              >
+                <input
+                  id="employee-department"
+                  type="text"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded={departmentOpen}
+                  aria-controls="employee-department-options"
+                  aria-activedescendant={
+                    departmentOpen && departments[activeDepartmentIndex]
+                      ? `employee-department-option-${departments[activeDepartmentIndex].id}`
+                      : undefined
+                  }
+                  aria-required="true"
+                  aria-invalid={Boolean(fieldErrors.departmentId)}
+                  aria-describedby={
+                    fieldErrors.departmentId
+                      ? "employee-department-error"
+                      : undefined
+                  }
+                  autoComplete="off"
+                  value={departmentSearch}
+                  onFocus={() => {
+                    setDepartmentOpen(true);
+                    setActiveDepartmentIndex(
+                      Math.max(
+                        0,
+                        departments.findIndex(
+                          (department) =>
+                            department.id === selectedDepartment?.id,
+                        ),
+                      ),
+                    );
+                  }}
+                  onClick={() => setDepartmentOpen(true)}
+                  onChange={(event) => {
+                    setDepartmentSearch(event.target.value);
+                    setSelectedDepartment(null);
+                    updateField("departmentId", "");
+                    setDepartmentSearchStarted(true);
+                    setDepartmentLoading(true);
+                    setDepartmentError(null);
+                    setDepartmentOpen(true);
+                    setActiveDepartmentIndex(0);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setDepartmentOpen(true);
+                      setActiveDepartmentIndex((current) =>
+                        departments.length === 0
+                          ? -1
+                          : event.key === "ArrowDown"
+                            ? (current + 1) % departments.length
+                            : (current - 1 + departments.length) %
+                              departments.length,
+                      );
+                    } else if (event.key === "Enter" && departmentOpen) {
+                      event.preventDefault();
+                      const department = departments[activeDepartmentIndex];
+                      if (department && !departmentLoading)
+                        selectDepartment(department);
+                    } else if (event.key === "Escape" && departmentOpen) {
+                      event.preventDefault();
+                      setDepartmentOpen(false);
+                    }
+                  }}
+                  placeholder="Cari atau pilih department"
+                  className={`min-h-11 w-full rounded-xl border bg-white px-3 pr-10 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 ${fieldErrors.departmentId ? "border-rose-400" : "border-slate-300"}`}
+                />
+                <ChevronDown
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-3 size-5 text-slate-500"
+                />
+                {departmentOpen && (
+                  <div
+                    id="employee-department-options"
+                    role="listbox"
+                    aria-label="Pilihan department"
+                    className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  >
+                    {departmentLoading ? (
+                      <p
+                        role="status"
+                        className="px-3 py-2 text-sm text-slate-500"
+                      >
+                        Mencari department...
+                      </p>
+                    ) : departments.length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-slate-500">
+                        Tidak ada department ditemukan.
+                      </p>
+                    ) : (
+                      departments.map((department, index) => (
+                        <button
+                          key={department.id}
+                          id={`employee-department-option-${department.id}`}
+                          type="button"
+                          role="option"
+                          aria-selected={
+                            form.departmentId === String(department.id)
+                          }
+                          onMouseEnter={() => setActiveDepartmentIndex(index)}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => selectDepartment(department)}
+                          className={`block w-full cursor-pointer px-3 py-2 text-left text-sm ${index === activeDepartmentIndex ? "bg-indigo-50 text-indigo-800" : "text-slate-700 hover:bg-slate-50"}`}
+                        >
+                          {department.name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              {departmentError && (
+                <p className="mt-1 text-xs text-rose-700">
+                  {departmentError}{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDepartmentLoading(true);
+                      setDepartmentError(null);
+                      setDepartmentOpen(true);
+                      setDepartmentRetry((current) => current + 1);
+                    }}
+                    className="cursor-pointer font-semibold underline"
+                  >
+                    Coba lagi
+                  </button>
+                </p>
+              )}
               {fieldErrors.departmentId && (
                 <p
                   id="employee-department-error"
@@ -263,7 +441,7 @@ export function EmployeeFormPage({
                   {fieldErrors.departmentId}
                 </p>
               )}
-            </label>
+            </div>
           </div>
           <label className="mt-5 flex items-center gap-3 text-sm font-medium text-slate-700">
             <input
@@ -293,7 +471,7 @@ export function EmployeeFormPage({
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-indigo-600 px-5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60"
+              className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl bg-indigo-600 px-5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60"
             >
               {saving ? "Menyimpan..." : "Simpan employee"}
             </button>
