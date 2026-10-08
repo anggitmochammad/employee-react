@@ -117,7 +117,16 @@ export function EmployeeFormPage({
           ? await createEmployee(input)
           : await updateEmployee(id as number, input);
       const destination = `${employeeRoutes.detail(employee.id)}${window.location.search}`;
-      window.history.pushState({ success: mode === "create" ? "Employee berhasil ditambahkan." : "Perubahan employee berhasil disimpan." }, "", destination);
+      window.history.pushState(
+        {
+          success:
+            mode === "create"
+              ? "Employee berhasil ditambahkan."
+              : "Perubahan employee berhasil disimpan.",
+        },
+        "",
+        destination,
+      );
       window.dispatchEvent(new PopStateEvent("popstate"));
       window.scrollTo(0, 0);
     } catch (cause) {
@@ -131,8 +140,15 @@ export function EmployeeFormPage({
               : cause.details.join(" ")
             : cause.message,
         );
-        const firstField = ["name", "email", "phone", "departmentId"].find((field) => validationErrors[field]);
-        if (firstField) document.getElementById(`employee-${firstField === "departmentId" ? "department" : firstField}`)?.focus();
+        const firstField = ["name", "email", "phone", "departmentId"].find(
+          (field) => validationErrors[field],
+        );
+        if (firstField)
+          document
+            .getElementById(
+              `employee-${firstField === "departmentId" ? "department" : firstField}`,
+            )
+            ?.focus();
       } else setError("Employee gagal disimpan.");
     } finally {
       setSaving(false);
@@ -146,8 +162,11 @@ export function EmployeeFormPage({
         onNavigate={onNavigate}
         className="mb-6 inline-flex items-center text-sm font-medium text-indigo-700 hover:text-indigo-800 focus-visible:outline-2 focus-visible:outline-indigo-600"
       >
-        <ArrowLeft aria-hidden="true" className="mr-2 inline size-4 align-text-bottom" />
-        Kembali
+        <ArrowLeft
+          aria-hidden="true"
+          className="mr-2 inline size-4 align-text-bottom"
+        />
+        Kembali ke daftar
       </AppLink>
       <PageHeader
         eyebrow="Data employee"
@@ -163,9 +182,17 @@ export function EmployeeFormPage({
         </div>
       ) : loadError ? (
         <section className="max-w-3xl rounded-2xl border border-rose-200 bg-rose-50 p-6 sm:p-8">
-          <h2 className="text-lg font-semibold text-rose-900">Form tidak tersedia</h2>
-          <p role="alert" className="mt-2 text-sm text-rose-700">{loadError}</p>
-          <button type="button" onClick={retryLoad} className="mt-4 min-h-10 cursor-pointer rounded-xl bg-white px-4 text-sm font-semibold text-rose-800 hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-rose-600">
+          <h2 className="text-lg font-semibold text-rose-900">
+            Form tidak tersedia
+          </h2>
+          <p role="alert" className="mt-2 text-sm text-rose-700">
+            {loadError}
+          </p>
+          <button
+            type="button"
+            onClick={retryLoad}
+            className="mt-4 min-h-10 cursor-pointer rounded-xl bg-white px-4 text-sm font-semibold text-rose-800 hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-rose-600"
+          >
             Coba lagi
           </button>
         </section>
@@ -198,6 +225,7 @@ export function EmployeeFormPage({
               type="tel"
               value={form.phone}
               error={fieldErrors.phone}
+              hint="Gunakan angka tanpa spasi atau tanda baca. Contoh: 081234567890 atau 6281234567890."
               required
               onChange={(value) => updateField("phone", value)}
             />
@@ -209,7 +237,11 @@ export function EmployeeFormPage({
                 id="employee-department"
                 required
                 aria-invalid={Boolean(fieldErrors.departmentId)}
-                aria-describedby={fieldErrors.departmentId ? "employee-department-error" : undefined}
+                aria-describedby={
+                  fieldErrors.departmentId
+                    ? "employee-department-error"
+                    : undefined
+                }
                 value={form.departmentId}
                 onChange={(event) =>
                   updateField("departmentId", event.target.value)
@@ -224,7 +256,10 @@ export function EmployeeFormPage({
                 ))}
               </select>
               {fieldErrors.departmentId && (
-                <p id="employee-department-error" className="mt-1 text-sm text-rose-700">
+                <p
+                  id="employee-department-error"
+                  className="mt-1 text-sm text-rose-700"
+                >
                   {fieldErrors.departmentId}
                 </p>
               )}
@@ -276,6 +311,7 @@ function Field({
   value,
   required,
   error,
+  hint,
   onChange,
 }: {
   id: string;
@@ -284,6 +320,7 @@ function Field({
   value: string;
   required?: boolean;
   error?: string;
+  hint?: string;
   onChange: (value: string) => void;
 }) {
   return (
@@ -296,12 +333,28 @@ function Field({
         type={type}
         required={required}
         aria-invalid={Boolean(error)}
-        aria-describedby={error ? `${id}-error` : undefined}
+        aria-describedby={
+          [hint ? `${id}-hint` : "", error ? `${id}-error` : ""]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className={`min-h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 ${error ? "border-rose-400" : "border-slate-300"}`}
       />
-      {error && <p id={`${id}-error`} className="mt-1 text-sm text-rose-700">{error}</p>}
+      {hint && (
+        <p
+          id={`${id}-hint`}
+          className="mt-1.5 text-xs leading-5 text-slate-500"
+        >
+          {hint}
+        </p>
+      )}
+      {error && (
+        <p id={`${id}-error`} className="mt-1 text-sm text-rose-700">
+          {error}
+        </p>
+      )}
     </label>
   );
 }
@@ -319,7 +372,8 @@ function mapValidationErrors(errors: string[]): Record<string, string> {
     ].find((candidate) =>
       message.toLowerCase().includes(candidate.toLowerCase()),
     );
-    if (field) fields[field === "department" ? "departmentId" : field] = message;
+    if (field)
+      fields[field === "department" ? "departmentId" : field] = message;
   });
   return fields;
 }
