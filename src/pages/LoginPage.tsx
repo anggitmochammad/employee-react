@@ -37,7 +37,11 @@ export function LoginPage({ authenticated, onLogin, onNavigate }: LoginPageProps
     <main className="grid min-h-screen place-items-center bg-slate-50 px-4 py-12 text-slate-900">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div aria-hidden="true" className="mx-auto mb-5 grid size-12 place-items-center rounded-2xl bg-indigo-600 text-xl font-bold text-white">E</div>
+          <img
+            src="/logo-login.svg"
+            alt="Maspion Superstore"
+            className="mx-auto mb-6 h-auto w-full max-w-[280px]"
+          />
           <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Masuk ke akun Anda</h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">Akses direktori dan kelola data employee.</p>
         </div>
