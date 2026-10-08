@@ -46,9 +46,9 @@ function readErrorDetails(body: unknown): string[] {
   return Array.isArray(errors) ? errors.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())) : []
 }
 
-export async function apiRequest<T>(path: `/api/${string}`, options: ApiOptions = {}): Promise<T> {
+async function apiFetch(path: `/api/${string}`, options: ApiOptions = {}): Promise<Response> {
   // Satu pintu untuk semua request API: menyiapkan header, JWT, fetch, dan
-  // normalisasi error. T adalah tipe response yang diharapkan oleh pemanggil.
+  // normalisasi error sebelum respons dibaca sebagai JSON atau Blob.
   const { auth = true, ...init } = options
   const headers = new Headers(init.headers)
   let requestToken: string | null = null
@@ -85,12 +85,27 @@ export async function apiRequest<T>(path: `/api/${string}`, options: ApiOptions 
     throw new ApiError(readErrorMessage(body) ?? (details.join(' ') || fallbackMessages[response.status] || 'Permintaan gagal. Coba lagi.'), response.status, details)
   }
 
+  return response
+}
+
+export async function apiRequest<T>(path: `/api/${string}`, options: ApiOptions = {}): Promise<T> {
+  const response = await apiFetch(path, options)
+
   // DELETE mengembalikan 204 tanpa body, jadi jangan mencoba response.json().
   if (response.status === 204) return undefined as T
 
   try {
     // Semua response sukses lain diharapkan berupa JSON sesuai kontrak API.
     return await response.json() as T
+  } catch {
+    throw new ApiError('Respons server tidak dapat dibaca.', response.status)
+  }
+}
+
+export async function apiRequestBlob(path: `/api/${string}`, options: ApiOptions = {}): Promise<Blob> {
+  const response = await apiFetch(path, options)
+  try {
+    return await response.blob()
   } catch {
     throw new ApiError('Respons server tidak dapat dibaca.', response.status)
   }

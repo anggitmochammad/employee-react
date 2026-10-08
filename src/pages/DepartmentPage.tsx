@@ -26,35 +26,34 @@ export function DepartmentPage({ canEdit }: { canEdit: boolean }) {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
-  const visibleDepartments = departments.filter((department) =>
-    department.name
-      .toLocaleLowerCase("id")
-      .includes(search.trim().toLocaleLowerCase("id")),
-  );
-
   useEffect(() => {
     if (editingId !== null) editInputRef.current?.focus();
   }, [editingId]);
 
   useEffect(() => {
     const controller = new AbortController();
-    getDepartments(controller.signal)
-      .then((data) => {
-        setDepartments(data);
-        setLoadError(null);
-      })
-      .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === "AbortError")
-          return;
-        setLoadError(
-          cause instanceof Error ? cause.message : "Department gagal dimuat.",
-        );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [retry]);
+    const timeout = window.setTimeout(() => {
+      getDepartments(controller.signal, search.trim())
+        .then((data) => {
+          setDepartments(data);
+          setLoadError(null);
+        })
+        .catch((cause: unknown) => {
+          if (cause instanceof DOMException && cause.name === "AbortError")
+            return;
+          setLoadError(
+            cause instanceof Error ? cause.message : "Department gagal dimuat.",
+          );
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false);
+        });
+    }, search.trim() ? 350 : 0);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [retry, search]);
 
   const retryLoad = () => {
     setLoading(true);
@@ -75,9 +74,8 @@ export function DepartmentPage({ canEdit }: { canEdit: boolean }) {
     setSuccess(null);
     try {
       const created = await createDepartment(trimmedName);
-      setDepartments((current) =>
-        [...current, created].sort((a, b) => a.id - b.id),
-      );
+      setLoading(true);
+      setRetry((current) => current + 1);
       setName("");
       setSuccess(`Department ${created.name} berhasil ditambahkan.`);
     } catch (cause) {
@@ -111,9 +109,8 @@ export function DepartmentPage({ canEdit }: { canEdit: boolean }) {
     setSuccess(null);
     try {
       const updated = await updateDepartment(department.id, trimmedName);
-      setDepartments((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      );
+      setLoading(true);
+      setRetry((current) => current + 1);
       setEditingId(null);
       setSuccess(`Department ${updated.name} berhasil diubah.`);
     } catch (cause) {
@@ -132,9 +129,8 @@ export function DepartmentPage({ canEdit }: { canEdit: boolean }) {
     setSuccess(null);
     try {
       await deleteDepartment(department.id);
-      setDepartments((current) =>
-        current.filter((item) => item.id !== department.id),
-      );
+      setLoading(true);
+      setRetry((current) => current + 1);
       setSuccess(`Department ${department.name} berhasil dihapus.`);
     } catch (cause) {
       setActionError(
@@ -225,8 +221,7 @@ export function DepartmentPage({ canEdit }: { canEdit: boolean }) {
             </h2>
             {!loading && !loadError && (
               <p className="mt-1 text-sm text-slate-500">
-                {visibleDepartments.length} dari {departments.length} department
-                ditampilkan.
+                {departments.length} department ditemukan.
               </p>
             )}
           </div>
@@ -242,6 +237,8 @@ export function DepartmentPage({ canEdit }: { canEdit: boolean }) {
               onChange={(event) => {
                 setSearch(event.target.value);
                 setEditingId(null);
+                setLoading(true);
+                setLoadError(null);
               }}
               placeholder="Nama department"
               className="mt-1 min-h-10 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
@@ -268,7 +265,7 @@ export function DepartmentPage({ canEdit }: { canEdit: boolean }) {
               Coba lagi
             </button>
           </div>
-        ) : visibleDepartments.length === 0 ? (
+        ) : departments.length === 0 ? (
           <div className="flex min-h-52 flex-col items-center justify-center px-6 text-center">
             <Building2
               aria-hidden="true"
@@ -303,7 +300,7 @@ export function DepartmentPage({ canEdit }: { canEdit: boolean }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {visibleDepartments.map((department) => (
+                {departments.map((department) => (
                   <tr key={department.id}>
                     <td className="px-5 py-3 sm:px-7">
                       {editingId === department.id ? (

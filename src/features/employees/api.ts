@@ -1,4 +1,4 @@
-import { apiRequest } from "../../api/client";
+import { apiRequest, apiRequestBlob } from "../../api/client";
 import type {
   CreateEmployeeInput,
   Employee,
@@ -6,13 +6,24 @@ import type {
   UpdateEmployeeInput,
 } from "../../types/employee";
 
-export type EmployeeListParams = {
-  page?: number;
-  limit?: number;
+export type EmployeeFilters = {
   search?: string;
   departmentId?: number;
   status?: boolean;
 };
+
+export type EmployeeListParams = EmployeeFilters & {
+  page?: number;
+  limit?: number;
+};
+
+function appendEmployeeFilters(query: URLSearchParams, filters: EmployeeFilters) {
+  if (filters.search) query.set("search", filters.search);
+  if (filters.departmentId)
+    query.set("departmentId", String(filters.departmentId));
+  if (filters.status !== undefined)
+    query.set("status", String(filters.status));
+}
 
 export function getEmployees(
   params: EmployeeListParams = {},
@@ -21,10 +32,7 @@ export function getEmployees(
   const query = new URLSearchParams();
   query.set("page", String(params.page ?? 1));
   query.set("limit", String(params.limit ?? 15));
-  if (params.search) query.set("search", params.search);
-  if (params.departmentId)
-    query.set("departmentId", String(params.departmentId));
-  if (params.status !== undefined) query.set("status", String(params.status));
+  appendEmployeeFilters(query, params);
   return apiRequest<EmployeeListResponse>(
     `/api/employees?${query.toString()}` as `/api/${string}`,
     { signal },
@@ -33,6 +41,14 @@ export function getEmployees(
 
 export function getEmployee(id: number, signal?: AbortSignal) {
   return apiRequest<Employee>(`/api/employees/${id}`, { signal });
+}
+
+export function exportEmployees(filters: EmployeeFilters = {}) {
+  const query = new URLSearchParams();
+  appendEmployeeFilters(query, filters);
+  return apiRequestBlob(
+    `/api/employees/export${query.size ? `?${query.toString()}` : ""}`,
+  );
 }
 
 export function createEmployee(input: CreateEmployeeInput) {

@@ -1,8 +1,9 @@
 import { apiRequest } from "../../api/client";
 import type { Department } from "../../types/employee";
 
-export function getDepartments(signal?: AbortSignal) {
-  return apiRequest<Department[]>("/api/departments", { signal });
+export function getDepartments(signal?: AbortSignal, search = "") {
+  const query = search ? `?${new URLSearchParams({ search })}` : "";
+  return apiRequest<Department[]>(`/api/departments${query}`, { signal });
 }
 
 export function createDepartment(name: string) {

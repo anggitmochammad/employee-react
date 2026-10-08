@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { ScrollText } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Pagination } from "../components/Pagination";
-import { getAuditLogs } from "../features/audit-logs/api";
-import type { AuditLog } from "../features/audit-logs/api";
+import { getAuditActors, getAuditLogs } from "../features/audit-logs/api";
+import type { AuditActor, AuditLog } from "../features/audit-logs/api";
 
 const dateFormatter = new Intl.DateTimeFormat("id-ID", {
   dateStyle: "medium",
   timeStyle: "short",
+  timeZone: "Asia/Jakarta",
 });
 
 const actionLabels: Record<AuditLog["action"], string> = {
@@ -25,7 +26,7 @@ function initialPage() {
   return Number.isSafeInteger(value) && value > 0 ? value : 1;
 }
 
-function initialAction() {
+function initialAction(): AuditLog["action"] | "" {
   const value = queryValue("action");
   return value === "create" || value === "update" || value === "delete"
     ? value
@@ -45,15 +46,6 @@ function initialDate(name: string) {
 function formatDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : dateFormatter.format(date);
-}
-
-function localDateKey(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function AuditData({
@@ -88,12 +80,15 @@ export function AuditLogPage() {
   const [page, setPage] = useState(initialPage);
   const [action, setAction] = useState(initialAction);
   const [userId, setUserId] = useState(initialUserId);
-  const [sortOrder, setSortOrder] = useState(() =>
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() =>
     queryValue("sortOrder") === "asc" ? "asc" : "desc",
   );
   const [startDate, setStartDate] = useState(() => initialDate("startDate"));
   const [endDate, setEndDate] = useState(() => initialDate("endDate"));
   const [pageLogs, setPageLogs] = useState<AuditLog[]>([]);
+  const [users, setUsers] = useState<AuditActor[]>([]);
+  const [userError, setUserError] = useState<string | null>(null);
+  const [userRetry, setUserRetry] = useState(0);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -102,13 +97,21 @@ export function AuditLogPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    getAuditLogs(page, controller.signal)
+    let reloading = false;
+    getAuditLogs(page, controller.signal, {
+      action: action || undefined,
+      userId: userId ? Number(userId) : undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      sortOrder,
+    })
       .then((response) => {
         setPageLogs(response.data);
         setTotal(response.total);
         setTotalPages(Math.max(response.totalPages, 1));
         setError(null);
         if (page > Math.max(response.totalPages, 1)) {
+          reloading = true;
           setLoading(true);
           setPage(Math.max(response.totalPages, 1));
         }
@@ -122,29 +125,27 @@ export function AuditLogPage() {
         );
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted && !reloading) setLoading(false);
       });
     return () => controller.abort();
-  }, [page, retry]);
+  }, [action, endDate, page, retry, sortOrder, startDate, userId]);
 
-  const users = [
-    ...new Map(pageLogs.map((log) => [log.userId, log.user])).entries(),
-  ].sort((a, b) => a[1].name.localeCompare(b[1].name, "id"));
+  useEffect(() => {
+    const controller = new AbortController();
+    getAuditActors(controller.signal)
+      .then((data) => {
+        setUsers(data);
+        setUserError(null);
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        setUserError(
+          cause instanceof Error ? cause.message : "Daftar user gagal dimuat.",
+        );
+      });
+    return () => controller.abort();
+  }, [userRetry]);
 
-  const logs = pageLogs
-    .filter((log) => {
-      if (action && log.action !== action) return false;
-      if (userId && String(log.userId) !== userId) return false;
-      const date = localDateKey(log.createdAt);
-      return (!startDate || date >= startDate) && (!endDate || date <= endDate);
-    })
-    .sort((a, b) => {
-      const comparison =
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      return sortOrder === "asc"
-        ? comparison || a.id - b.id
-        : -comparison || b.id - a.id;
-    });
   const hasFilters = Boolean(action || userId || startDate || endDate);
 
   useEffect(() => {
@@ -169,12 +170,21 @@ export function AuditLogPage() {
     setRetry((current) => current + 1);
   };
 
+  const changeFilter = (update: () => void) => {
+    update();
+    setPage(1);
+    setLoading(true);
+    setError(null);
+  };
+
   const resetFilters = () => {
-    setAction("");
-    setUserId("");
-    setSortOrder("desc");
-    setStartDate("");
-    setEndDate("");
+    changeFilter(() => {
+      setAction("");
+      setUserId("");
+      setSortOrder("desc");
+      setStartDate("");
+      setEndDate("");
+    });
   };
 
   return (
@@ -197,21 +207,17 @@ export function AuditLogPage() {
           </h2>
           {!loading && !error && (
             <p className="mt-1 text-sm text-slate-500">
-              {logs.length} aktivitas ditampilkan pada halaman ini, dari {total}{" "}
+              {pageLogs.length} aktivitas ditampilkan pada halaman ini, dari {total}{" "}
               aktivitas.
             </p>
           )}
-          <p className="mt-1 text-xs text-slate-500">
-            Filter dan urutan hanya berlaku pada halaman ini karena API audit
-            log belum mendukung filter server-side.
-          </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <label className="block text-sm font-medium text-slate-700">
               Aktivitas
               <select
                 value={action}
                 onChange={(event) =>
-                  setAction(event.target.value as typeof action)
+                  changeFilter(() => setAction(event.target.value as typeof action))
                 }
                 className="mt-1 min-h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               >
@@ -221,30 +227,48 @@ export function AuditLogPage() {
                 <option value="delete">Hapus</option>
               </select>
             </label>
-            <label className="block text-sm font-medium text-slate-700">
-              User
-              <select
-                value={userId}
-                onChange={(event) => setUserId(event.target.value)}
-                className="mt-1 min-h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-              >
-                <option value="">Semua user</option>
-                {userId && !users.some(([id]) => String(id) === userId) && (
-                  <option value={userId}>User #{userId} (halaman lain)</option>
-                )}
-                {users.map(([id, user]) => (
-                  <option key={id} value={id}>
-                    {user.name} ({user.email})
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                User
+                <select
+                  value={userId}
+                  onChange={(event) =>
+                    changeFilter(() => setUserId(event.target.value))
+                  }
+                  className="mt-1 min-h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                >
+                  <option value="">Semua user</option>
+                  {userId && !users.some((user) => String(user.id) === userId) && (
+                    <option value={userId}>User #{userId}</option>
+                  )}
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} ({user.email})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {userError && (
+                <span className="mt-1 block text-xs text-rose-700">
+                  {userError}{" "}
+                  <button
+                    type="button"
+                    onClick={() => setUserRetry((current) => current + 1)}
+                    className="cursor-pointer font-semibold underline"
+                  >
+                    Coba lagi
+                  </button>
+                </span>
+              )}
+            </div>
             <label className="block text-sm font-medium text-slate-700">
               Urutan tanggal
               <select
                 value={sortOrder}
                 onChange={(event) =>
-                  setSortOrder(event.target.value as "asc" | "desc")
+                  changeFilter(() =>
+                    setSortOrder(event.target.value as "asc" | "desc"),
+                  )
                 }
                 className="mt-1 min-h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               >
@@ -258,7 +282,9 @@ export function AuditLogPage() {
                 type="date"
                 value={startDate}
                 max={endDate || undefined}
-                onChange={(event) => setStartDate(event.target.value)}
+                onChange={(event) =>
+                  changeFilter(() => setStartDate(event.target.value))
+                }
                 className="mt-1 min-h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               />
             </label>
@@ -268,7 +294,9 @@ export function AuditLogPage() {
                 type="date"
                 value={endDate}
                 min={startDate || undefined}
-                onChange={(event) => setEndDate(event.target.value)}
+                onChange={(event) =>
+                  changeFilter(() => setEndDate(event.target.value))
+                }
                 className="mt-1 min-h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               />
             </label>
@@ -303,7 +331,7 @@ export function AuditLogPage() {
               Coba lagi
             </button>
           </div>
-        ) : logs.length === 0 ? (
+        ) : pageLogs.length === 0 ? (
           <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center">
             <ScrollText
               aria-hidden="true"
@@ -311,14 +339,14 @@ export function AuditLogPage() {
             />
             <p className="font-semibold text-slate-900">
               {hasFilters
-                ? "Tidak ada hasil pada halaman ini"
+                ? "Tidak ada hasil"
                 : total > 0
                   ? "Tidak ada aktivitas pada halaman ini"
                   : "Belum ada aktivitas"}
             </p>
             <p className="mt-1 text-sm text-slate-500">
               {hasFilters || total > 0
-                ? "Coba ubah filter atau buka halaman lain."
+                ? "Coba ubah filter Anda."
                 : "Perubahan data akan tercatat di sini."}
             </p>
           </div>
@@ -343,7 +371,7 @@ export function AuditLogPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {logs.map((log) => (
+                {pageLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50">
                     <td className="whitespace-nowrap px-5 py-4 text-slate-600 sm:px-7">
                       <time dateTime={log.createdAt}>
