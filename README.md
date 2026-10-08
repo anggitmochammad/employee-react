@@ -2,6 +2,11 @@
 
 Aplikasi web untuk melihat dan mengelola data employee dan department. Dibuat dengan React, TypeScript, Tailwind CSS, dan Vite. Halaman login, daftar employee, dashboard, department, serta audit log mengambil data dari **API backend terpisah**. Repo ini hanya berisi frontend; agar bisa login dan melihat data, backend harus tersedia.
 
+## Tautan
+
+- [Aplikasi live](https://employee-react-xi.vercel.app)
+- [Repository backend (employee-nest)](https://github.com/anggitmochammad/employee-nest) — lihat kode backend ini jika ingin menelusuri API atau menyiapkannya secara lokal.
+
 ## Yang perlu disiapkan
 
 1. **Git** untuk mengunduh kode. Cek dengan `git --version` di Terminal atau PowerShell.
