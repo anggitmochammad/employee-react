@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import {
+  Download,
   Eye,
   LoaderCircle,
   Pencil,
@@ -14,7 +15,7 @@ import type { NavigateHandler } from "../components/AppLink";
 import { PageHeader } from "../components/PageHeader";
 import { Pagination } from "../components/Pagination";
 import { getDepartments } from "../features/departments/api";
-import { deleteEmployee, getEmployees } from "../features/employees/api";
+import { deleteEmployee, exportEmployees, getEmployees } from "../features/employees/api";
 import { employeeRoutes } from "../features/employees/routes";
 import type { Department, Employee } from "../types/employee";
 
@@ -60,6 +61,8 @@ export function EmployeeListPage({
   const [departmentRetry, setDepartmentRetry] = useState(0);
   const [success, setSuccess] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
@@ -179,6 +182,32 @@ export function EmployeeListPage({
     setRetry((current) => current + 1);
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const csv = await exportEmployees({
+        search: searchInput.trim(),
+        departmentId: departmentId ? Number(departmentId) : undefined,
+        status: status === "" ? undefined : status === "true",
+      });
+      const url = URL.createObjectURL(csv);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "employees.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (cause) {
+      setExportError(
+        cause instanceof Error ? cause.message : "Export employee gagal.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <>
       <PageHeader
@@ -190,13 +219,13 @@ export function EmployeeListPage({
         aria-labelledby="employee-list-heading"
         className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
       >
-        <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:px-7 xl:flex-row xl:items-end xl:justify-between">
-          <div>
+        <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+          <div className="min-w-0">
             <h2
               id="employee-list-heading"
               className="text-base font-semibold text-slate-900"
             >
-              Daftar employee
+              Daftar Employee
             </h2>
             <p className="mt-1 text-sm text-slate-500">
               {error && employees.length === 0
@@ -204,8 +233,24 @@ export function EmployeeListPage({
                 : `${total} employee ditemukan.`}
             </p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <label className="block min-w-56">
+          {canEdit && (
+            <AppLink
+              to={`${employeeRoutes.create}${listQuery}`}
+              onNavigate={onNavigate}
+              className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-600 sm:w-auto"
+            >
+              <Plus
+                aria-hidden="true"
+                className="mr-2 size-4"
+                strokeWidth={2.25}
+              />
+              Tambah Employee
+            </AppLink>
+          )}
+        </div>
+        <div className="flex flex-col gap-4 border-y border-slate-200 bg-slate-50/40 px-5 py-4 sm:px-7 xl:flex-row xl:items-end">
+          <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(14rem,1.5fr)_minmax(11rem,1fr)_minmax(9rem,0.75fr)]">
+            <label className="block min-w-0">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Cari
               </span>
@@ -214,10 +259,10 @@ export function EmployeeListPage({
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 placeholder="Nama atau email"
-                className="min-h-10 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               />
             </label>
-            <label className="block min-w-44">
+            <label className="block min-w-0">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Department
               </span>
@@ -226,7 +271,7 @@ export function EmployeeListPage({
                 onChange={(event) =>
                   handleFilterChange(setDepartmentId, event.target.value)
                 }
-                className="min-h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               >
                 <option value="">Semua department</option>
                 {departments.map((department) => (
@@ -236,7 +281,7 @@ export function EmployeeListPage({
                 ))}
               </select>
             </label>
-            <label className="block min-w-36">
+            <label className="block min-w-0">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Status
               </span>
@@ -245,27 +290,31 @@ export function EmployeeListPage({
                 onChange={(event) =>
                   handleFilterChange(setStatus, event.target.value)
                 }
-                className="min-h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               >
                 <option value="">Semua status</option>
                 <option value="true">Aktif</option>
                 <option value="false">Nonaktif</option>
               </select>
             </label>
-            {canEdit && (
-              <AppLink
-                to={`${employeeRoutes.create}${listQuery}`}
-                onNavigate={onNavigate}
-                className="inline-flex min-h-10 items-center justify-center rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700"
-              >
-                <Plus
-                  aria-hidden="true"
-                  className="mr-2 size-4"
-                  strokeWidth={2.25}
-                />
-                Tambah employee
-              </AppLink>
-            )}
+          </div>
+          <div className="flex w-full shrink-0 flex-col sm:w-auto sm:items-end sm:self-end">
+            <p className="mb-1 text-center text-xs text-slate-500 sm:text-right">
+              Sesuai filter aktif; tanpa filter: semua
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleExport()}
+              disabled={exporting}
+              className="inline-flex h-10 w-full cursor-pointer items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 px-4 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              {exporting ? (
+                <LoaderCircle aria-hidden="true" className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Download aria-hidden="true" className="mr-2 size-4" />
+              )}
+              {exporting ? "Mengunduh..." : "Export CSV"}
+            </button>
           </div>
         </div>
         {departmentError && (
@@ -282,6 +331,14 @@ export function EmployeeListPage({
               Coba lagi
             </button>
           </div>
+        )}
+        {exportError && (
+          <p
+            role="alert"
+            className="mx-5 mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:mx-7"
+          >
+            {exportError}
+          </p>
         )}
         {success && (
           <p
