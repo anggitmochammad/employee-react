@@ -18,16 +18,38 @@ export function isTokenExpired(token: string): boolean {
 }
 
 function readInitialToken(): string | null {
+  let token: string | null = null
+
   try {
-    const token = window.sessionStorage.getItem(STORAGE_KEY)
-    if (token && isTokenExpired(token)) {
-      window.sessionStorage.removeItem(STORAGE_KEY)
-      return null
-    }
-    return token
+    token = window.localStorage.getItem(STORAGE_KEY)
   } catch {
+    // Coba sesi lama jika shared storage tidak tersedia.
+  }
+
+  if (!token) {
+    try {
+      token = window.sessionStorage.getItem(STORAGE_KEY)
+      if (token) {
+        // Migrasikan sesi versi lama agar tautan di tab baru tetap terautentikasi.
+        window.localStorage.setItem(STORAGE_KEY, token)
+        window.sessionStorage.removeItem(STORAGE_KEY)
+      }
+    } catch {
+      // Token tetap null jika browser memblokir penyimpanan.
+    }
+  }
+
+  if (token && isTokenExpired(token)) {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY)
+      window.sessionStorage.removeItem(STORAGE_KEY)
+    } catch {
+      // Token kedaluwarsa tetap ditolak walau storage tidak dapat dibersihkan.
+    }
     return null
   }
+
+  return token
 }
 
 let currentToken = readInitialToken()
@@ -37,9 +59,33 @@ function emitChange() {
   listeners.forEach((listener) => listener())
 }
 
+function handleStorageChange(event: StorageEvent) {
+  if (event.key !== STORAGE_KEY || event.storageArea !== window.localStorage) return
+
+  let nextToken = event.newValue
+  if (nextToken && isTokenExpired(nextToken)) {
+    nextToken = null
+    try {
+      window.localStorage.removeItem(STORAGE_KEY)
+    } catch {
+      // Nilai in-memory tetap dibersihkan jika storage tidak tersedia.
+    }
+  }
+
+  if (currentToken !== nextToken) {
+    currentToken = nextToken
+    emitChange()
+  }
+}
+
 export function subscribeSession(listener: () => void): () => void {
   listeners.add(listener)
-  return () => listeners.delete(listener)
+  if (listeners.size === 1) window.addEventListener('storage', handleStorageChange)
+
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) window.removeEventListener('storage', handleStorageChange)
+  }
 }
 
 export function getSessionToken(): string | null {
@@ -47,12 +93,22 @@ export function getSessionToken(): string | null {
 }
 
 export function saveSessionToken(token: string): void {
-  window.sessionStorage.setItem(STORAGE_KEY, token)
+  window.localStorage.setItem(STORAGE_KEY, token)
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // Sesi baru tetap valid jika penyimpanan versi lama tidak dapat dibersihkan.
+  }
   currentToken = token
   emitChange()
 }
 
 export function clearSessionToken(): void {
+  try {
+    window.localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // The in-memory session must still be cleared if storage is unavailable.
+  }
   try {
     window.sessionStorage.removeItem(STORAGE_KEY)
   } catch {
