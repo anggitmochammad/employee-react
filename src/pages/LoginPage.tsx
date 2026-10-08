@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { AppLink } from '../components/AppLink'
 import type { NavigateHandler } from '../components/AppLink'
 
@@ -88,7 +89,7 @@ export function LoginPage({ authenticated, onLogin, onNavigate }: LoginPageProps
                     onClick={() => setShowPassword((visible) => !visible)}
                     className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-r-xl text-slate-500 transition hover:text-indigo-600 focus-visible:outline-2 focus-visible:outline-indigo-600"
                   >
-                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    {showPassword ? <EyeOff aria-hidden="true" className="size-5" /> : <Eye aria-hidden="true" className="size-5" />}
                   </button>
                 </div>
               </div>
@@ -107,23 +108,5 @@ export function LoginPage({ authenticated, onLogin, onNavigate }: LoginPageProps
         </section>
       </div>
     </main>
-  )
-}
-
-function EyeIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 12s3.4-5.5 9.5-5.5 9.5 5.5 9.5 5.5-3.4 5.5-9.5 5.5S2.5 12 2.5 12Z" />
-      <circle cx="12" cy="12" r="2.5" />
-    </svg>
-  )
-}
-
-function EyeOffIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m3 3 18 18M10.6 6.7A10.8 10.8 0 0 1 12 6.5c6.1 0 9.5 5.5 9.5 5.5a17.8 17.8 0 0 1-3 3.5M6.2 6.8C3.8 8.3 2.5 12 2.5 12S5.9 17.5 12 17.5c1 0 1.9-.2 2.7-.5" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
-    </svg>
   )
 }
