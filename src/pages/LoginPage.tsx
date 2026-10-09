@@ -83,7 +83,7 @@ export function LoginPage({ authenticated, onLogin, onNavigate }: LoginPageProps
                     minLength={8}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Minimal 8 karakter"
+                    placeholder="Password..."
                     className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-4 pr-12 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                   />
                   <button
